@@ -220,9 +220,9 @@ def describe_metric_table(df: pd.DataFrame, metric: str = "macro_f1") -> str:
 def interpret_audit_stats(stats: Mapping[str, object] | pd.Series) -> dict[str, str]:
     """Provide a cautious interpretation of data audit statistics, such as counts and splits."""
     row = _clean_mapping(stats)
-    total = _first_number(row, ("total", "n_total", "n_images", "\u006aumlah", "\u006aumlah_gambar"))
-    missing = _first_number(row, ("missing", "n_missing", "missing_labels", "label_hilang"))
-    duplicates = _first_number(row, ("duplicates", "n_duplicates", "duplicate_images", "duplikat"))
+    total = _first_number(row, ("total", "n_total", "n_images", "images_in_scope"))
+    missing = _first_number(row, ("missing", "n_missing", "missing_labels", "missing_files"))
+    duplicates = _first_number(row, ("duplicates", "n_duplicates", "duplicate_images", "near_duplicate_pairs"))
     train = _first_number(row, ("train", "n_train", "train_count"))
     validation = _first_number(row, ("validation", "val", "n_val", "validation_count"))
     test = _first_number(row, ("test", "n_test", "test_count"))

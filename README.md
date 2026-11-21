@@ -30,19 +30,24 @@ lung masks as initially assumed. The scope was therefore adapted to the actual c
   (unspecified `Pneumonia`/ARDS), and rare categories (Lipoid, Tuberculosis, Aspiration).
 - **Lung-mask ablation was replaced by center-crop ablation** because masks are unavailable.
 
-## Experiment structure
+## Experiment status
 
-| Code | Analysis | Output |
-|------|----------|--------|
-| E1 | Data audit, duplicates, patient-level splitting | `audit_summary.json` |
-| E2 | Baseline CNN versus transfer learning | `experiments_summary.csv` |
-| E3 | Architecture comparison (ResNet50/EfficientNet-B0/DenseNet121) | `experiments_summary.csv` |
-| E4 | Class imbalance (none / class-weighted / weighted sampler) | `experiments_summary.csv` |
-| E5 | Center-crop ablation | `e5_ablation.csv` |
-| E6 | Robustness (noise/blur/brightness/contrast/downscale) | `e6_robustness.csv` |
-| E7 | Grad-CAM explainability | `e7_gradcam_*` |
-| E8 | Calibration and selective prediction | `e8_calibration.json` |
-| — | Bootstrap confidence intervals | `final_bootstrap_ci.json` |
+| Code | Analysis | Status | Output |
+|------|----------|--------|--------|
+| E1 | Data audit, duplicates, patient-level splitting | ✅ done | `audit_summary.json` |
+| E2 | Baseline CNN versus transfer learning | ✅ done | `experiments_summary.csv` |
+| E3 | Architecture comparison (ResNet50/EfficientNet-B0/DenseNet121) | ✅ done | `experiments_summary.csv` |
+| E4 | Class imbalance (none / class-weighted / weighted sampler) | ✅ done | `experiments_summary.csv` |
+| E5 | Center-crop ablation | ⏳ pending | `e5_ablation.csv` |
+| E6 | Robustness (noise/blur/brightness/contrast/downscale) | ⏳ pending | `e6_robustness.csv` |
+| E7 | Grad-CAM explainability | ⏳ pending | `e7_gradcam_*` |
+| E8 | Calibration and selective prediction | ⏳ pending | `e8_calibration.json` |
+| — | Bootstrap confidence intervals | ⏳ pending | `final_bootstrap_ci.json` |
+
+**E1–E4 report:** `reports/ANALYSIS_REPORT.md`. Headline result: transfer learning
+(ResNet50, test macro F1 = 0.410) clearly beats the from-scratch baseline (0.216);
+class-imbalance handling raises balanced accuracy (up to 0.443) at the cost of overall
+accuracy — a sensitivity/specificity trade-off.
 
 ## How to run
 
