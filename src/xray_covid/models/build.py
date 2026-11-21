@@ -35,6 +35,15 @@ def build_model(name: str, num_classes: int, pretrained: bool = True, freeze_bac
     if name == "small_cnn":
         return SmallCNN(num_classes)
 
+    if name == "resnet18":
+        weights = models.ResNet18_Weights.IMAGENET1K_V1 if pretrained else None
+        model = models.resnet18(weights=weights)
+        if freeze_backbone:
+            _set_requires_grad(model, False)
+        model.fc = nn.Linear(model.fc.in_features, num_classes)
+        _set_requires_grad(model.fc, True)
+        return model
+
     if name == "resnet50":
         weights = models.ResNet50_Weights.IMAGENET1K_V2 if pretrained else None
         model = models.resnet50(weights=weights)
@@ -69,7 +78,9 @@ def build_model(name: str, num_classes: int, pretrained: bool = True, freeze_bac
 def unfreeze_for_finetune(model: nn.Module, name: str) -> None:
     """Unfreeze the last block(s) of the backbone for fine-tuning."""
     name = name.lower()
-    if name == "resnet50":
+    if name == "resnet18":
+        _set_requires_grad(model.layer4, True)
+    elif name == "resnet50":
         _set_requires_grad(model.layer4, True)
     elif name == "efficientnet_b0":
         _set_requires_grad(model.features[-3:], True)
