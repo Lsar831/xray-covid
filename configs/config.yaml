@@ -1,0 +1,50 @@
+seed: 42
+
+data:
+  raw_metadata: data/raw/covid-chest-xray/metadata.csv
+  raw_images_dir: data/raw/covid-chest-xray/images
+  processed_dir: data/processed
+  splits_dir: artifacts/splits
+  image_size: 224
+  modality_filter: ["X-ray"]
+  include_classes: ["COVID-19", "Viral_Pneumonia", "Bacterial_Pneumonia", "Fungal_Pneumonia"]
+  min_samples_per_class: 15
+  val_fraction: 0.15
+  test_fraction: 0.15
+  phash_threshold: 2
+
+training:
+  batch_size: 16
+  epochs_baseline: 25
+  epochs_transfer_frozen: 8
+  epochs_transfer_finetune: 15
+  lr_baseline: 0.001
+  lr_head: 0.001
+  lr_finetune: 0.00005
+  weight_decay: 0.0001
+  early_stopping_patience: 6
+  num_workers: 2
+  device: "cpu"
+
+imbalance:
+  strategies: ["none", "class_weighted", "weighted_sampler"]
+
+robustness:
+  gaussian_noise_std: [0.02, 0.05, 0.1]
+  brightness_factor: [0.7, 1.3]
+  contrast_factor: [0.7, 1.3]
+  gaussian_blur_sigma: [1.0, 2.0]
+  downscale_factor: [0.5, 0.25]
+
+ablation:
+  center_crop_fractions: [1.0, 0.8, 0.6]
+
+calibration:
+  n_bins: 10
+  uncertainty_threshold: 0.5
+
+bootstrap:
+  n_resamples: 1000
+  confidence_level: 0.95
+
+seeds_for_repeat: [42, 123, 2024]
