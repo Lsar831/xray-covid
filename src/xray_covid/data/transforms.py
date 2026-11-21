@@ -11,7 +11,7 @@ IMAGENET_STD = [0.229, 0.224, 0.225]
 
 
 def build_train_transform(image_size: int) -> transforms.Compose:
-    """Augmentation ringan, aman untuk citra X-ray (tanpa flip horizontal agresif)."""
+    """Light augmentation suitable for chest X-ray images (no aggressive flipping)."""
     return transforms.Compose(
         [
             transforms.Resize((image_size, image_size)),

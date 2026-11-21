@@ -1,99 +1,103 @@
 # xray-covid
 
-Analisis komparatif klasifikasi **COVID-19 vs pneumonia etiologi lain** pada citra
-chest X-ray: data audit, transfer learning, penanganan class imbalance, robustness
-testing, explainability (Grad-CAM), dan confidence calibration — lengkap dengan
-deskripsi serta interpretasi untuk setiap analisis.
+Comparative analysis for classifying **COVID-19 versus other pneumonia etiologies**
+in chest X-ray images: data auditing, transfer learning, class-imbalance handling,
+robustness testing, Grad-CAM explainability, and confidence calibration, with a
+description and interpretation for every analysis.
 
-> **Disclaimer**: Proyek ini untuk riset/edukasi, **bukan** alat diagnosis klinis.
-> Prediksi model tidak boleh dipakai mandiri untuk diagnosis, penapisan, atau terapi.
+> **Disclaimer:** This project is for research and education only, **not** a clinical
+> diagnostic tool. Model predictions must not be used independently for diagnosis,
+> screening, or treatment decisions.
 
 ## Dataset
 
-Sumber yang diminta: [bachrr/covid-chest-xray (Kaggle)](https://www.kaggle.com/datasets/bachrr/covid-chest-xray).
-Endpoint unduh Kaggle memerlukan autentikasi, sehingga data diambil dari **mirror
-resmi yang dirujuk halaman Kaggle**: [ieee8023/covid-chestxray-dataset](https://github.com/ieee8023/covid-chestxray-dataset)
+Requested source: [bachrr/covid-chest-xray (Kaggle)](https://www.kaggle.com/datasets/bachrr/covid-chest-xray).
+The Kaggle download endpoint requires authentication, so the data was obtained from
+the **official mirror referenced by the Kaggle page**:
+[ieee8023/covid-chestxray-dataset](https://github.com/ieee8023/covid-chestxray-dataset)
 (commit `78543292f8b01d5e0ed1d0e15dce71949f0657bb`).
 
-### Penyesuaian scope (penting)
+### Scope adjustment (important)
 
-Dataset ini **tidak** memuat kelas `Normal`, `Viral Pneumonia` generik, ataupun
-*lung mask* seperti asumsi awal. Karena itu scope disesuaikan berdasarkan isi aktual:
+This dataset does **not** contain a `Normal` class, generic `Viral Pneumonia`, or
+lung masks as initially assumed. The scope was therefore adapted to the actual content:
 
-- **Klasifikasi 4 kelas etiologi** (semua ≥30 sampel):
+- **Four-class etiology classification** (each class has at least 30 samples):
   `COVID-19` (504), `Bacterial_Pneumonia` (73), `Viral_Pneumonia` (42 non-COVID:
-  SARS/MERS/Influenza/dll), `Fungal_Pneumonia` (32).
-- Hanya modality **X-ray** (CT dan volume dikecualikan).
-- **Dikecualikan**: label tidak valid (`todo`/`Unknown`), kategori ambigu
-  (`Pneumonia`/ARDS tidak-spesifik), serta kategori langka (Lipoid, Tuberkulosis, Aspirasi).
-- **Lung-mask ablation diganti center-crop ablation** karena mask tidak tersedia.
+  SARS/MERS/Influenza/etc.), and `Fungal_Pneumonia` (32).
+- **X-ray modality only** (CT images and volumes are excluded).
+- **Excluded:** invalid labels (`todo`/`Unknown`), ambiguous categories
+  (unspecified `Pneumonia`/ARDS), and rare categories (Lipoid, Tuberculosis, Aspiration).
+- **Lung-mask ablation was replaced by center-crop ablation** because masks are unavailable.
 
-## Struktur eksperimen
+## Experiment structure
 
-| Kode | Analisis | Output |
+| Code | Analysis | Output |
 |------|----------|--------|
-| E1 | Data audit, duplikasi, split pasien-level | `audit_summary.json` |
-| E2 | Baseline CNN vs transfer learning | `experiments_summary.csv` |
-| E3 | Perbandingan arsitektur (ResNet50/EfficientNet-B0/DenseNet121) | `experiments_summary.csv` |
+| E1 | Data audit, duplicates, patient-level splitting | `audit_summary.json` |
+| E2 | Baseline CNN versus transfer learning | `experiments_summary.csv` |
+| E3 | Architecture comparison (ResNet50/EfficientNet-B0/DenseNet121) | `experiments_summary.csv` |
 | E4 | Class imbalance (none / class-weighted / weighted sampler) | `experiments_summary.csv` |
 | E5 | Center-crop ablation | `e5_ablation.csv` |
 | E6 | Robustness (noise/blur/brightness/contrast/downscale) | `e6_robustness.csv` |
 | E7 | Grad-CAM explainability | `e7_gradcam_*` |
-| E8 | Calibration + selective prediction | `e8_calibration.json` |
-| — | Bootstrap confidence interval | `final_bootstrap_ci.json` |
+| E8 | Calibration and selective prediction | `e8_calibration.json` |
+| — | Bootstrap confidence intervals | `final_bootstrap_ci.json` |
 
-## Cara menjalankan
+## How to run
 
 ```bash
 python -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 
-# E1: audit data + buat split
+# E1: audit the data and create splits
 python scripts/01_data_audit.py
 
-# E2-E4: training & evaluasi (gunakan --quick untuk smoke test CPU)
+# E2-E4: training and evaluation (use --quick for a CPU smoke test)
 python scripts/02_train_experiments.py
 
-# E5-E8: ablation, robustness, Grad-CAM, calibration pada model terbaik
+# E5-E8: ablation, robustness, Grad-CAM, and calibration on the best model
 python scripts/03_posthoc_analysis.py --experiment E4_resnet50_class_weighted --model-name resnet50
 
-# Bootstrap CI
+# Bootstrap confidence intervals
 python scripts/04_bootstrap_ci.py --experiment E4_resnet50_class_weighted
 
-# Susun laporan akhir (deskripsi + interpretasi tiap analisis)
+# Assemble the final report (description and interpretation per analysis)
 python scripts/05_build_report.py
 ```
 
-Laporan akhir: **`reports/LAPORAN_ANALISIS.md`** — setiap bagian memuat tujuan,
-metode, hasil (tabel/grafik), deskripsi faktual, interpretasi, implikasi, dan keterbatasan.
+Final report: **`reports/ANALYSIS_REPORT.md`** — each section includes the objective,
+method, results (tables/figures), factual description, interpretation, implications,
+and limitations.
 
-## Struktur proyek
+## Project structure
 
 ```
-configs/config.yaml          # seluruh hyperparameter & pengaturan
-scripts/                     # runner E1..E8 + report
+configs/config.yaml          # all hyperparameters and settings
+scripts/                     # E1..E8 runners + report builder
 src/xray_covid/
-  config.py                  # load config, seed, paths
+  config.py                  # config loading, seeding, paths
   data/                      # manifest, audit, splits, dataset, transforms, loaders
-  models/                    # build model + training loop (imbalance-aware)
+  models/                    # model builders + imbalance-aware training loop
   eval/                      # metrics, calibration, robustness
   explain/                   # Grad-CAM
-  reporting.py               # pembangun laporan + interpretasi otomatis (ID)
+  reporting.py               # report builder + automatic English interpretations
 artifacts/                   # splits, checkpoints, metrics (git-ignored)
-reports/                     # LAPORAN_ANALISIS.md + figures
+reports/                     # ANALYSIS_REPORT.md + figures
 ```
 
 ## Reproducibility
 
-Split bersifat **pasien-level dan dedup-aware** (gambar dari pasien/near-duplicate yang
-sama tidak tersebar antar split) untuk mencegah kebocoran. Random seed dan seluruh
-hyperparameter dikonfigurasi di `configs/config.yaml`.
+Splits are **patient-level and dedup-aware** (images from the same patient or
+near-duplicate group never span multiple splits) to prevent leakage. Random seeds and
+all hyperparameters are configured in `configs/config.yaml`.
 
-## Keterbatasan
+## Limitations
 
-- Pelatihan dilakukan di CPU tanpa GPU, sehingga epoch dibatasi; hasil bersifat
-  indikatif, bukan benchmark maksimal.
-- Dataset didominasi kasus COVID-19 dari publikasi, sehingga ada bias seleksi dan
-  potensi perbedaan sumber antar kelas (risiko shortcut learning).
-- Ukuran test set kecil; baca metrik bersama bootstrap confidence interval.
-- Grad-CAM dan center-region hanya **indikator** fokus model, bukan validasi klinis.
+- Training runs on CPU without a GPU, so the number of epochs is limited; results are
+  indicative rather than maximal-performance benchmarks.
+- The dataset is dominated by COVID-19 cases from publications, introducing selection
+  bias and potential source differences across classes (shortcut-learning risk).
+- The test set is small; read the metrics together with the bootstrap confidence intervals.
+- Grad-CAM and the central-region measure are **indicators** of model focus, not
+  clinical validation.
