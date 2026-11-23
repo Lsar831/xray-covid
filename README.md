@@ -38,16 +38,20 @@ lung masks as initially assumed. The scope was therefore adapted to the actual c
 | E2 | Baseline CNN versus transfer learning | ✅ done | `experiments_summary.csv` |
 | E3 | Architecture comparison (ResNet50/EfficientNet-B0/DenseNet121) | ✅ done | `experiments_summary.csv` |
 | E4 | Class imbalance (none / class-weighted / weighted sampler) | ✅ done | `experiments_summary.csv` |
-| E5 | Center-crop ablation | ⏳ pending | `e5_ablation.csv` |
-| E6 | Robustness (noise/blur/brightness/contrast/downscale) | ⏳ pending | `e6_robustness.csv` |
-| E7 | Grad-CAM explainability | ⏳ pending | `e7_gradcam_*` |
-| E8 | Calibration and selective prediction | ⏳ pending | `e8_calibration.json` |
-| — | Bootstrap confidence intervals | ⏳ pending | `final_bootstrap_ci.json` |
+| E5 | Center-crop ablation | ✅ done | `e5_ablation_<exp>.csv` |
+| E6 | Robustness (noise/blur/brightness/contrast/downscale) | ✅ done | `e6_robustness_<exp>.csv` |
+| E7 | Grad-CAM explainability | ✅ done | `e7_gradcam_*_<exp>` |
+| E8 | Calibration and selective prediction | ✅ done | `e8_calibration_<exp>.json` |
+| — | Bootstrap confidence intervals | ✅ done | `final_bootstrap_ci_<exp>.json` |
 
-**E1–E4 report:** `reports/ANALYSIS_REPORT.md`. Headline result: transfer learning
-(ResNet50, test macro F1 = 0.410) clearly beats the from-scratch baseline (0.216);
-class-imbalance handling raises balanced accuracy (up to 0.443) at the cost of overall
-accuracy — a sensitivity/specificity trade-off.
+E5–E8 are run for two models: `E4_resnet50_class_weighted` and `E2_resnet50`.
+
+**Headline result.** Transfer learning beats the from-scratch baseline (test macro F1 0.410
+vs 0.216), but the report's central finding is a negative one: the test set is 79% COVID-19,
+and the models with the highest overall accuracy send 90–97% of their predictions to a single
+class while losing almost all minority-class detection. Class weighting is the only strategy
+that spreads predictions across all four classes; it lowers accuracy to 0.552 but raises
+balanced accuracy to 0.443. See **`reports/ANALYSIS_REPORT.md`**.
 
 ## How to run
 
@@ -61,11 +65,14 @@ python scripts/01_data_audit.py
 # E2-E4: training and evaluation (use --quick for a CPU smoke test)
 python scripts/02_train_experiments.py
 
-# E5-E8: ablation, robustness, Grad-CAM, and calibration on the best model
-python scripts/03_posthoc_analysis.py --experiment E4_resnet50_class_weighted --model-name resnet50
+# E5-E8: ablation, robustness, Grad-CAM, and calibration on the selected best model
+python scripts/03_posthoc_analysis.py --experiment E4_resnet50_class_weighted
+python scripts/03_posthoc_analysis.py --experiment E2_resnet50
 
 # Bootstrap confidence intervals
 python scripts/04_bootstrap_ci.py --experiment E4_resnet50_class_weighted
+python scripts/04_bootstrap_ci.py --experiment E2_resnet50
+python scripts/04_bootstrap_ci.py --experiment E3_efficientnet_b0
 
 # Assemble the final report (description and interpretation per analysis)
 python scripts/05_build_report.py
