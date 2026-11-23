@@ -354,18 +354,33 @@ def interpret_calibration_metrics(metrics: Mapping[str, object] | pd.Series) -> 
     }
 
 
-def render_sections(title: str, sections: Sequence[AnalysisSection]) -> str:
-    """Build a complete Markdown report from a sequence of ``AnalysisSection`` objects."""
+def render_sections(
+    title: str,
+    sections: Sequence[AnalysisSection],
+    *,
+    summary: str = "",
+    numbering: bool = True,
+) -> str:
+    """Build a complete Markdown report from a sequence of ``AnalysisSection`` objects.
+
+    ``summary`` is rendered directly after the disclaimer. Numbering is applied to section
+    titles, and titles that already contain a numeric prefix are left as they are.
+    """
     document_title = _clean(title).replace("\r", " ").replace("\n", " ")
-    lines = [f"# {document_title}", "", CLINICAL_DISCLAIMER, ""]
+    lines = [f"# {document_title}", "", f"> {CLINICAL_DISCLAIMER}", ""]
+    if summary and summary.strip():
+        lines.extend(["## Summary", "", _clean(summary), ""])
     if not sections:
         lines.extend(["No analysis sections are available yet.", ""])
     for index, section in enumerate(sections, start=1):
         if not isinstance(section, AnalysisSection):
             raise TypeError("Each section must be an AnalysisSection.")
+        heading = _clean(section.title)
+        if numbering and not heading[:1].isdigit():
+            heading = f"{index}. {heading}"
         lines.extend(
             [
-                f"## {index}. {_clean(section.title)}",
+                f"## {heading}",
                 "",
                 f"**Objective.** {_clean(section.objective)}",
                 "",
@@ -375,19 +390,14 @@ def render_sections(title: str, sections: Sequence[AnalysisSection]) -> str:
                 "",
                 _clean(section.results),
                 "",
-                "### Description",
-                "",
-                _clean(section.description),
-                "",
-                "### Interpretation",
-                "",
-                _clean(section.interpretation),
-                "",
             ]
         )
-        for heading, text in (("Implication", section.implication), ("Limitations", section.limitations)):
+        if section.description and section.description.strip():
+            lines.extend([_clean(section.description), ""])
+        lines.extend(["### Interpretation", "", _clean(section.interpretation), ""])
+        for heading_text, text in (("Implication", section.implication), ("Limitations", section.limitations)):
             if text and text.strip():
-                lines.extend([f"### {heading}", "", _clean(text), ""])
+                lines.extend([f"### {heading_text}", "", _clean(text), ""])
     lines.extend(["---", "", f"**Clinical disclaimer:** {CLINICAL_DISCLAIMER}", ""])
     return "\n".join(lines)
 

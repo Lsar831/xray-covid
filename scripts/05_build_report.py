@@ -97,7 +97,7 @@ def build_report():
             "score. Grouping by near-duplicate first is what prevents that."
         )
         sections.append(AnalysisSection(
-            title="E1. Data Audit and Leakage Prevention",
+            title="Data quality and leakage control (E1)",
             objective="Understand the data, detect duplication, and build splits that cannot leak.",
             method="A manifest is built from the dataset metadata and labels are normalised into four etiology "
                    "classes. Exact duplicates are found by md5 hash and near-duplicates by difference hash with a "
@@ -109,56 +109,6 @@ def build_report():
             limitations="Most images come from published COVID-19 case reports, which introduces selection bias and "
                         "possible source differences between classes. The difference hash is a heuristic, so heavily "
                         "edited near-duplicates may still pass undetected.",
-        ))
-
-    # ---------- E2/E3/E4 ----------
-    summary_path = METRICS / "experiments_summary.csv"
-    if summary_path.exists():
-        summary = pd.read_csv(summary_path)
-        show = summary.rename(columns={
-            "experiment": "Experiment", "model": "Model", "imbalance_strategy": "Imbalance",
-            "best_val_macro_f1": "Val_F1", "accuracy": "Acc", "balanced_accuracy": "Bal_Acc",
-            "macro_f1": "Test_MacroF1", "macro_roc_auc": "ROC_AUC",
-        })
-        show = show[["Experiment", "Model", "Imbalance", "Val_F1", "Acc", "Bal_Acc", "Test_MacroF1", "ROC_AUC"]]
-        table = markdown_table(show.round(4))
-        best = summary.sort_values("macro_f1", ascending=False).iloc[0]
-        worst = summary.sort_values("macro_f1", ascending=False).iloc[-1]
-        desc = (
-            f"Six configurations were trained on the same splits and scored on the same test set. "
-            f"{best['experiment']} reaches the highest test macro F1 at {fmt(best['macro_f1'], 3)}, followed "
-            f"closely by {summary.sort_values('macro_f1', ascending=False).iloc[1]['experiment']}, while "
-            f"{worst['experiment']} trails at {fmt(worst['macro_f1'], 3)}. "
-            f"The spread between the best and the worst model is {fmt(best['macro_f1'] - worst['macro_f1'], 3)}. "
-            "The same ranking does not hold for balanced accuracy. The class-weighted model sits near the bottom "
-            f"of the macro-F1 column at {fmt(summary.loc[summary['experiment'] == 'E4_resnet50_class_weighted', 'macro_f1'].iloc[0], 3)}, "
-            f"yet it leads on balanced accuracy at {fmt(summary['balanced_accuracy'].max(), 3)}. "
-            "Reading the two metrics together is what makes the trade-off visible."
-        )
-        interp = (
-            "Transfer learning clearly beats the model trained from scratch, so pretrained features carry real "
-            "signal even when the domain is grayscale radiography. Among the pretrained backbones the differences "
-            "are small: ResNet50, EfficientNet-B0 and the weighted-sampler variant all land within roughly "
-            "0.03 macro F1 of each other, which is below the sampling noise of a 105-image test set. "
-            "The more meaningful contrast runs along the imbalance axis. Rebalancing the loss lowers macro F1 and "
-            "accuracy but lifts balanced accuracy, because it stops the model from collapsing onto the majority "
-            "class. Section 3 shows exactly how large that collapse is."
-        )
-        sections.append(AnalysisSection(
-            title="E2-E4. Baseline, Transfer Learning, and Class-Imbalance Handling",
-            objective="Compare a baseline CNN against transfer learning and test two ways of handling class imbalance.",
-            method="The baseline is a small CNN trained from scratch. The transfer models are ResNet50, "
-                   "EfficientNet-B0 and DenseNet121 pretrained on ImageNet, with the backbone frozen and then the "
-                   "top blocks fine-tuned. Imbalance is addressed either through a class-weighted loss or a "
-                   "weighted random sampler, and one run uses no correction at all. The model is chosen on "
-                   "validation macro F1 and only then evaluated once on the test set.",
-            results=table,
-            description=desc,
-            interpretation=interp,
-            limitations="Training runs on CPU without a GPU, so the number of epochs is deliberately small and the "
-                        "absolute scores are indicative rather than competitive. Each configuration was trained with "
-                        "a single seed, and the test set is small enough that small gaps should be read together "
-                        "with the confidence intervals in the last section.",
         ))
 
     # ---------- Key finding: accuracy is misleading under class dominance ----------
@@ -195,7 +145,7 @@ def build_report():
         crowd_tag = "E2_resnet50"
         crowd_recall = next(r for r in recall_rows if r["Experiment"] == crowd_tag)
         sections.append(AnalysisSection(
-            title="Key Finding: High Accuracy Can Hide a Useless Classifier",
+            title="High accuracy can hide a useless classifier (key finding)",
             objective="Check whether the headline accuracy reflects genuine four-class discrimination.",
             method="For every trained model, count how often each class is predicted on the test set and compare the "
                    f"counts with the true composition ({n_majority} COVID-19 images out of {n_test}). Per-class recall "
@@ -224,6 +174,56 @@ def build_report():
             limitations=f"Each minority class has between 5 and 11 test images, so a single image moves a per-class "
                         f"recall by roughly ten points. The table demonstrates a failure mode rather than measuring "
                         f"its exact size.",
+        ))
+
+    # ---------- E2/E3/E4 ----------
+    summary_path = METRICS / "experiments_summary.csv"
+    if summary_path.exists():
+        summary = pd.read_csv(summary_path)
+        show = summary.rename(columns={
+            "experiment": "Experiment", "model": "Model", "imbalance_strategy": "Imbalance",
+            "best_val_macro_f1": "Val_F1", "accuracy": "Acc", "balanced_accuracy": "Bal_Acc",
+            "macro_f1": "Test_MacroF1", "macro_roc_auc": "ROC_AUC",
+        })
+        show = show[["Experiment", "Model", "Imbalance", "Val_F1", "Acc", "Bal_Acc", "Test_MacroF1", "ROC_AUC"]]
+        table = markdown_table(show.round(4))
+        best = summary.sort_values("macro_f1", ascending=False).iloc[0]
+        worst = summary.sort_values("macro_f1", ascending=False).iloc[-1]
+        desc = (
+            f"Six configurations were trained on the same splits and scored on the same test set. "
+            f"{best['experiment']} reaches the highest test macro F1 at {fmt(best['macro_f1'], 3)}, followed "
+            f"closely by {summary.sort_values('macro_f1', ascending=False).iloc[1]['experiment']}, while "
+            f"{worst['experiment']} trails at {fmt(worst['macro_f1'], 3)}. "
+            f"The spread between the best and the worst model is {fmt(best['macro_f1'] - worst['macro_f1'], 3)}. "
+            "The same ranking does not hold for balanced accuracy. The class-weighted model sits near the bottom "
+            f"of the macro-F1 column at {fmt(summary.loc[summary['experiment'] == 'E4_resnet50_class_weighted', 'macro_f1'].iloc[0], 3)}, "
+            f"yet it leads on balanced accuracy at {fmt(summary['balanced_accuracy'].max(), 3)}. "
+            "Reading the two metrics together is what makes the trade-off visible."
+        )
+        interp = (
+            "Transfer learning clearly beats the model trained from scratch, so pretrained features carry real "
+            "signal even when the domain is grayscale radiography. Among the pretrained backbones the differences "
+            "are small: ResNet50, EfficientNet-B0 and the weighted-sampler variant all land within roughly "
+            "0.03 macro F1 of each other, which is below the sampling noise of a 105-image test set. "
+            "The more meaningful contrast runs along the imbalance axis. Rebalancing the loss lowers macro F1 and "
+            "accuracy but lifts balanced accuracy, because it stops the model from collapsing onto the majority "
+            "class. The section on high accuracy shows exactly how large that collapse is."
+        )
+        sections.append(AnalysisSection(
+            title="Architectures and class imbalance (E2-E4)",
+            objective="Compare a baseline CNN against transfer learning and test two ways of handling class imbalance.",
+            method="The baseline is a small CNN trained from scratch. The transfer models are ResNet50, "
+                   "EfficientNet-B0 and DenseNet121 pretrained on ImageNet, with the backbone frozen and then the "
+                   "top blocks fine-tuned. Imbalance is addressed either through a class-weighted loss or a "
+                   "weighted random sampler, and one run uses no correction at all. The model is chosen on "
+                   "validation macro F1 and only then evaluated once on the test set.",
+            results=table,
+            description=desc,
+            interpretation=interp,
+            limitations="Training runs on CPU without a GPU, so the number of epochs is deliberately small and the "
+                        "absolute scores are indicative rather than competitive. Each configuration was trained with "
+                        "a single seed, and the test set is small enough that small gaps should be read together "
+                        "with the bootstrap confidence intervals at the end of the report.",
         ))
 
     # ---------- E5 ----------
@@ -272,7 +272,7 @@ def build_report():
             "against cropping aggressively."
         )
         sections.append(AnalysisSection(
-            title="E5. Center-Crop Ablation",
+            title="Dependence on image borders (E5)",
             objective="Test whether predictions depend on the image border or on the central thoracic region.",
             method="The test set is re-evaluated with the outer part of each image cropped away, keeping 100, 80 and "
                    "60 percent of the frame and resizing back to 224 pixels. The ablation is run on the two models "
@@ -340,7 +340,7 @@ def build_report():
         )
         fig = "\n\n".join(f"![robustness {tag}](figures/e6_robustness_{tag}.png)" for tag in e6_by_tag)
         sections.append(AnalysisSection(
-            title="E6. Robustness Testing",
+            title="Resilience to image degradation (E6)",
             objective="Measure model resilience to image-quality degradation.",
             method="The test images are degraded with additive Gaussian noise, brightness and contrast shifts, "
                    "Gaussian blur and downscaling at several severities, and every condition is scored with macro F1 "
@@ -409,7 +409,7 @@ def build_report():
         )
         fig = "\n\n".join(f"![reliability {tag}](figures/e8_reliability_diagram_{tag}.png)" for tag in e8_by_tag)
         sections.append(AnalysisSection(
-            title="E8. Confidence Calibration and Selective Prediction",
+            title="Confidence calibration and abstention (E8)",
             objective="Check whether model confidence matches observed accuracy and test an abstention mechanism.",
             method="Reliability diagrams and Expected Calibration Error are computed on the test set before and after "
                    "temperature scaling. The single temperature parameter is fitted on the validation set, optimised "
@@ -447,7 +447,7 @@ def build_report():
             "would use."
         )
         sections.append(AnalysisSection(
-            title="E7. Explainability with Grad-CAM",
+            title="Where the models look: Grad-CAM (E7)",
             objective="Inspect which image regions drive the predictions.",
             method="Grad-CAM is computed on the last convolutional block for eight randomly sampled test images per "
                    "model, and the fraction of activation energy falling inside the central region is used as a "
@@ -493,7 +493,7 @@ def build_report():
             "architecture ranking carries the weight of this study."
         )
         sections.append(AnalysisSection(
-            title="Statistical Evaluation: Bootstrap Confidence Intervals",
+            title="How much the scores could move (bootstrap intervals)",
             objective="Quantify how much the reported test scores could move under resampling.",
             method="Percentile bootstrap over the test-set predictions, with 95% intervals for macro F1 and "
                    "balanced accuracy.",
@@ -505,8 +505,29 @@ def build_report():
                         "across several seeds would capture variation that this procedure cannot see.",
         ))
 
-    title = "COVID-19 and Other Pneumonia Etiology Classification in Chest X-ray: A Comparative Analysis"
-    return render_sections(title, sections)
+    title = "COVID-19 and Other Pneumonia Etiology Classification in Chest X-ray"
+    summary = (
+        "This study trains and evaluates several convolutional networks to separate COVID-19 from three other "
+        "pneumonia etiologies on a public chest X-ray dataset. The headline metric is not the accuracy the models "
+        "reach but what that accuracy is worth. Because 79 percent of the test images are COVID-19, a model can "
+        "score well by answering that class every time, and several of them do. The small CNN trained from scratch "
+        "sends 97 percent of its predictions to one class. The best ResNet50 sends 94 percent. Accuracy is therefore "
+        "reported alongside balanced accuracy, macro F1 and per-class recall throughout.\n\n"
+        "Transfer learning clearly helps. A ResNet50 pretrained on ImageNet reaches a test macro F1 of 0.410 against "
+        "0.216 for the model trained from scratch. Rebalancing the loss trades a little accuracy for a "
+        "substantially more even answer distribution, lifting balanced accuracy from 0.377 to 0.443 and spreading "
+        "predictions over all four classes. That model still misses most bacterial pneumonia and finds only 61 "
+        "percent of COVID-19 cases, so it is more useful for analysis than for any clinical purpose.\n\n"
+        "The remaining analyses test how these models fail rather than how well they succeed. Cropping away the "
+        "outer border changes the scores, and the pattern of that change points to clutter in the frame. Synthetic "
+        "corruption shows the unweighted model "
+        "keeping its accuracy while losing half its macro F1, because it simply collapses onto the majority class. "
+        "Temperature scaling cannot repair that, and abstaining on low-confidence cases has no useful operating "
+        "point. Grad-CAM places most attention over the lungs. Bootstrap intervals finally show that the differences "
+        "between architectures are smaller than the sampling noise of a 105-image test set, which is why the "
+        "imbalance effect rather than the architecture ranking is the finding worth keeping."
+    )
+    return render_sections(title, sections, summary=summary)
 
 
 def main():
