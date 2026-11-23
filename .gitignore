@@ -11,3 +11,4 @@ artifacts/
 *.pth
 *.onnx
 .DS_Store
+reports/ANALYSIS_REPORT.html

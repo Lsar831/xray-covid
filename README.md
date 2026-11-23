@@ -73,13 +73,18 @@ python scripts/04_bootstrap_ci.py --experiment E4_resnet50_class_weighted
 python scripts/04_bootstrap_ci.py --experiment E2_resnet50
 python scripts/04_bootstrap_ci.py --experiment E3_efficientnet_b0
 
-# Assemble the final report (description and interpretation per analysis)
+# Assemble the final report
 python scripts/05_build_report.py
+
+# Optional: export a justified HTML version (requires pandoc)
+python scripts/08_export_html.py
 ```
 
-Final report: **`reports/ANALYSIS_REPORT.md`** — each section includes the objective,
-method, results (tables/figures), factual description, interpretation, implications,
-and limitations.
+Final report: **`reports/ANALYSIS_REPORT.md`**. It opens with a summary, then presents each
+analysis as objective, method, results (tables and figures), interpretation, and limitations.
+
+The optional HTML export applies justified alignment from `reports/report.css` and embeds the
+figures, so the single `.html` file can be opened or printed from any browser.
 
 ## Project structure
 
