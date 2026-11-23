@@ -385,18 +385,25 @@ def build_report():
             "it cannot change accuracy. It only redistributes confidence across the probability scale. "
             + (
                 f"The class-weighted model is underconfident rather than overconfident, with a gap of "
-                f"{fmt(cw['overconfidence_gap_before'], 2)} between confidence and accuracy, and scaling closes a "
-                f"small part of it, moving ECE from {fmt(cw['ece_before'], 3)} to {fmt(cw['ece_after'], 3)}. "
+                f"{fmt(cw['overconfidence_gap_before'], 2)} between confidence and accuracy. Its temperature of "
+                f"{fmt(cw['temperature'], 2)} pulls confidence up from {fmt(cw['mean_confidence_before'], 2)} to "
+                f"{fmt(cw['mean_confidence_after'], 2)} and moves ECE from {fmt(cw['ece_before'], 3)} to "
+                f"{fmt(cw['ece_after'], 3)}, a marginal improvement. "
                 if cw
                 else ""
             )
             + (
-                f"The unweighted model is calibrated better to begin with, at {fmt(e2['ece_before'], 3)}, yet the "
-                f"same procedure makes it worse, rising to {fmt(e2['ece_after'], 3)}. The reason is that its "
-                "confidence had concentrated around a single answer, and the fitted scale sharpens that further "
-                "instead of spreading it. A low ECE is therefore not evidence that a model is trustworthy: a "
-                "classifier that answers one class with moderate confidence can look well calibrated while missing "
-                "every other class."
+                f"The unweighted model looks better calibrated to begin with, at {fmt(e2['ece_before'], 3)}, and the "
+                f"same procedure makes it worse, raising the error to {fmt(e2['ece_after'], 3)}. The cause is "
+                f"visible in the fitted value. A temperature of {fmt(e2['temperature'], 2)} is below one, so scaling "
+                "sharpens the distribution instead of softening it. It was fitted on a validation set where mean "
+                f"confidence of {fmt(e2['mean_confidence_val'], 2)} ran well below an accuracy of "
+                f"{fmt(e2['accuracy_val'], 2)}, and the fit read that gap as a sign of an underconfident model. On "
+                f"the test set the sharpened predictions then average {fmt(e2['mean_confidence_after'], 2)} "
+                f"confidence against {fmt(e2['accuracy'], 2)} accuracy, so the model ends up overconfident instead. "
+                "A single temperature estimated from 99 images did not transfer to 105 different ones. A low ECE is "
+                "therefore not evidence that a model is trustworthy. A classifier that answers one class with "
+                "moderate confidence can look well calibrated while missing every other class."
                 if e2
                 else ""
             )
@@ -430,21 +437,31 @@ def build_report():
         attn = pd.concat(frames, ignore_index=True)
         means = attn.groupby("Experiment")["central_attention_fraction"].mean()
         hit = attn.assign(correct=attn["true"] == attn["pred"]).groupby("Experiment")["correct"].mean()
+        spread = attn.groupby("Experiment")["central_attention_fraction"].agg(["min", "max"])
+        summary_table = pd.DataFrame(
+            {
+                "Experiment": means.index,
+                "Images": attn.groupby("Experiment").size().values,
+                "Mean central attention": [pct(means[tag]) for tag in means.index],
+                "Attention range": [f"{fmt(spread.loc[tag, 'min'])} - {fmt(spread.loc[tag, 'max'])}" for tag in means.index],
+                "Predicted correctly": [pct(hit[tag]) for tag in means.index],
+            }
+        )
         desc = " ".join(
             f"Across its eight sampled images, {tag} places a mean of {pct(means[tag])} of the activation energy in "
             f"the central region and classifies {pct(hit[tag])} of them correctly."
             for tag in e7_by_tag
         )
-        figs = "\n\n".join(f"![gradcam {tag}](figures/e7_gradcam_gallery_{tag}.png)" for tag in e7_by_tag)
+        # The galleries show the original radiographs next to the heatmaps, so they are part of the
+        # per-image results and stay out of the report. The aggregated attention table is enough.
         interp = (
-            "Both models concentrate most of their attention over the lungs rather than on borders, markers or text, "
-            "which is the reassuring case. The class-weighted model is the more consistent of the two. Its heatmaps "
-            "sit high in the central fraction on most samples and cover both lungs, including on the one viral case "
-            "it classifies correctly rather than defaulting to COVID-19. The unweighted model also looks at the chest, "
-            "but its heatmaps are weaker on the minority cases, which matches its near-total reliance on the "
-            "majority class in the previous sections. Grad-CAM supports this reading but cannot prove it. A heatmap "
-            "inside the chest does not establish that the model responds to the radiological findings a clinician "
-            "would use."
+            "Both models spend most of their activation energy in the central region rather than on borders, markers "
+            "or text, which is the reassuring case. The class-weighted model goes further, placing a higher share "
+            "inside the lungs on average, but it is also less accurate on these particular images. That contrast "
+            "is worth stating plainly: attention that sits over the chest does not make the prediction right. "
+            "Grad-CAM supports the reading that neither model relies on image clutter, but it cannot prove it. A "
+            "heatmap inside the chest does not establish that the model responds to the radiological findings a "
+            "clinician would use."
         )
         sections.append(AnalysisSection(
             title="Where the models look: Grad-CAM (E7)",
@@ -452,11 +469,13 @@ def build_report():
             method="Grad-CAM is computed on the last convolutional block for eight randomly sampled test images per "
                    "model, and the fraction of activation energy falling inside the central region is used as a "
                    "rough indicator of focus on the lungs.",
-            results=figs + "\n\n" + markdown_table(attn.round(3)),
+            results=markdown_table(summary_table),
             description=desc,
             interpretation=interp,
             limitations="Without lung masks the central region is only a coarse proxy, Grad-CAM outputs are low "
-                        "resolution, and eight images per model cannot represent the dataset.",
+                        "resolution, and eight images per model cannot represent the dataset. The heatmap "
+                        "galleries are kept in reports/figures/e7_gradcam_* because they contain the source "
+                        "radiographs, and per-image results are not reproduced here.",
         ))
 
     # ---------- Bootstrap CI ----------

@@ -155,24 +155,30 @@ def main():
     test_logits, test_labels, test_probs = forward_logits(model, test_loader, device)
     test_pred = test_probs.argmax(axis=1)
 
+    n_bins = int(cfg["calibration"]["n_bins"])
     conf, correct = prediction_confidences(test_probs, test_pred, test_labels)
-    ece_before, bins_before = expected_calibration_error(conf, correct, cfg["calibration"]["n_bins"])
+    ece_before, bins_before = expected_calibration_error(conf, correct, n_bins)
 
     scaler = TemperatureScaler()
     temp = scaler.fit(val_logits, val_labels)
     scaled_probs = scaler.transform_probs(test_logits)
     scaled_pred = scaled_probs.argmax(axis=1)
     conf_s, correct_s = prediction_confidences(scaled_probs, scaled_pred, test_labels)
-    ece_after, bins_after = expected_calibration_error(conf_s, correct_s, cfg["calibration"]["n_bins"])
+    ece_after, bins_after = expected_calibration_error(conf_s, correct_s, n_bins)
 
     thresholds = [0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9]
     selective = [selective_prediction(conf_s, scaled_pred, test_labels, t) for t in thresholds]
 
+    val_pred = val_probs.argmax(axis=1)
     calib = {
         "temperature": temp,
         "ece_before": ece_before,
         "ece_after": ece_after,
         "mean_confidence_before": float(conf.mean()),
+        "mean_confidence_after": float(conf_s.mean()),
+        # Validation reference, so the report can explain why a fitted temperature may not transfer.
+        "mean_confidence_val": float(val_probs.max(axis=1).mean()),
+        "accuracy_val": float((val_pred == val_labels).mean()),
         "accuracy": float((test_pred == test_labels).mean()),
         "overconfidence_gap_before": float(conf.mean() - (test_pred == test_labels).mean()),
         "selective_prediction": selective,
@@ -184,17 +190,28 @@ def main():
 
     # reliability diagram
     fig, ax = plt.subplots(figsize=(6, 6))
-    ax.plot([0, 1], [0, 1], "k--", label="Perfect calibration")
+    ax.plot([0, 1], [0, 1], "k--", lw=1, label="Perfect calibration")
     for bins, lbl, color in [(bins_before, f"Before (ECE={ece_before:.3f})", "tomato"),
                              (bins_after, f"After (ECE={ece_after:.3f})", "seagreen")]:
-        bdf = pd.DataFrame(bins).dropna(subset=["accuracy"])
+        bdf = pd.DataFrame(bins)
+        bdf = bdf[bdf["count"] > 0].dropna(subset=["accuracy"])
         if len(bdf):
-            centers = (bdf["bin_lo"] + bdf["bin_hi"]) / 2
-            ax.plot(centers, bdf["accuracy"], marker="o", label=lbl, color=color)
-    ax.set_xlabel("Confidence")
-    ax.set_ylabel("Accuracy")
-    ax.set_title(f"Reliability diagram ({tag})")
-    ax.legend()
+            # Point size follows the number of samples in the bin. Empty bins carry no
+            # evidence and are left out, so the curve never implies more data than exists.
+            sizes = 18 + 190 * (bdf["count"] / bdf["count"].max())
+            ax.scatter(bdf["avg_confidence"], bdf["accuracy"], s=sizes, color=color,
+                       edgecolor="white", linewidth=0.8, zorder=3,
+                       label=f"{lbl}, n={int(bdf['count'].sum())}")
+            ax.plot(bdf["avg_confidence"], bdf["accuracy"], color=color, lw=1, alpha=0.55, zorder=2)
+    ax.set_xlabel("Mean predicted confidence in bin")
+    ax.set_ylabel("Observed accuracy in bin")
+    ax.set_xlim(0, 1)
+    ax.set_ylim(-0.03, 1.03)
+    ax.grid(alpha=0.25)
+    ax.set_title(f"Reliability diagram ({tag}, {n_bins} bins)")
+    ax.text(0.02, 0.02, "Marker size = samples per bin", transform=ax.transAxes,
+            fontsize=8, color="0.35")
+    ax.legend(loc="upper left", fontsize=8)
     plt.tight_layout()
     plt.savefig(figures / f"e8_reliability_diagram_{tag}.png", dpi=130)
     plt.close()

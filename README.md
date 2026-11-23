@@ -75,16 +75,12 @@ python scripts/04_bootstrap_ci.py --experiment E3_efficientnet_b0
 
 # Assemble the final report
 python scripts/05_build_report.py
-
-# Optional: export a justified HTML version (requires pandoc)
-python scripts/08_export_html.py
 ```
 
 Final report: **`reports/ANALYSIS_REPORT.md`**. It opens with a summary, then presents each
 analysis as objective, method, results (tables and figures), interpretation, and limitations.
-
-The optional HTML export applies justified alignment from `reports/report.css` and embeds the
-figures, so the single `.html` file can be opened or printed from any browser.
+The report embeds only aggregate figures. The Grad-CAM heatmap galleries stay in
+`reports/figures/e7_gradcam_*` because they contain the source radiographs.
 
 ## Project structure
 

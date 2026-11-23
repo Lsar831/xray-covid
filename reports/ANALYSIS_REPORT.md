@@ -190,7 +190,7 @@ E2_resnet50 enters calibration with an ECE of 0.041 at a mean confidence of 0.79
 
 ### Interpretation
 
-Temperature scaling is fitted on the validation set and then applied to the test set, so by construction it cannot change accuracy. It only redistributes confidence across the probability scale. The class-weighted model is underconfident rather than overconfident, with a gap of -0.07 between confidence and accuracy, and scaling closes a small part of it, moving ECE from 0.153 to 0.148. The unweighted model is calibrated better to begin with, at 0.041, yet the same procedure makes it worse, rising to 0.078. The reason is that its confidence had concentrated around a single answer, and the fitted scale sharpens that further instead of spreading it. A low ECE is therefore not evidence that a model is trustworthy: a classifier that answers one class with moderate confidence can look well calibrated while missing every other class. Selective prediction splits along the same fault line. For the unweighted model, abstaining on low-confidence cases pushes accuracy from 0.80 at full coverage to about 0.90 when roughly 58% of the images are retained, but the retained images are the ones it was already calling COVID-19, so the gain reflects the majority class rather than new diagnostic ability. For the class-weighted model no threshold reaches 0.62 accuracy, so there is no operating point worth setting. Abstention can express uncertainty, but it cannot supply the missing class information.
+Temperature scaling is fitted on the validation set and then applied to the test set, so by construction it cannot change accuracy. It only redistributes confidence across the probability scale. The class-weighted model is underconfident rather than overconfident, with a gap of -0.07 between confidence and accuracy. Its temperature of 0.66 pulls confidence up from 0.49 to 0.58 and moves ECE from 0.153 to 0.148, a marginal improvement. The unweighted model looks better calibrated to begin with, at 0.041, and the same procedure makes it worse, raising the error to 0.078. The cause is visible in the fitted value. A temperature of 0.71 is below one, so scaling sharpens the distribution instead of softening it. It was fitted on a validation set where mean confidence of 0.74 ran well below an accuracy of 0.85, and the fit read that gap as a sign of an underconfident model. On the test set the sharpened predictions then average 0.86 confidence against 0.80 accuracy, so the model ends up overconfident instead. A single temperature estimated from 99 images did not transfer to 105 different ones. A low ECE is therefore not evidence that a model is trustworthy. A classifier that answers one class with moderate confidence can look well calibrated while missing every other class. Selective prediction splits along the same fault line. For the unweighted model, abstaining on low-confidence cases pushes accuracy from 0.80 at full coverage to about 0.90 when roughly 58% of the images are retained, but the retained images are the ones it was already calling COVID-19, so the gain reflects the majority class rather than new diagnostic ability. For the class-weighted model no threshold reaches 0.62 accuracy, so there is no operating point worth setting. Abstention can express uncertainty, but it cannot supply the missing class information.
 
 ### Limitations
 
@@ -204,38 +204,20 @@ The temperature is fitted on only 99 validation images, and ECE depends on the n
 
 ### Results
 
-![gradcam E2_resnet50](figures/e7_gradcam_gallery_E2_resnet50.png)
-
-![gradcam E4_resnet50_class_weighted](figures/e7_gradcam_gallery_E4_resnet50_class_weighted.png)
-
-| filename | true | pred | confidence | central_attention_fraction | Experiment |
-| --- | --- | --- | --- | --- | --- |
-| bdc40f9ad2395d88c92479089f5d1b_jumbo-10.jpeg | Bacterial_Pneumonia | COVID-19 | 0.8080 | 0.6450 | E2_resnet50 |
-| tpmd200203f2-c.png | COVID-19 | COVID-19 | 0.9610 | 0.5370 | E2_resnet50 |
-| 000001-4.jpg | Viral_Pneumonia | COVID-19 | 0.5390 | 0.4820 | E2_resnet50 |
-| 5782ae15.jpg | COVID-19 | COVID-19 | 0.8580 | 0.8100 | E2_resnet50 |
-| 16953_4_1.jpg | COVID-19 | COVID-19 | 0.8710 | 0.8270 | E2_resnet50 |
-| covid-19-pneumonia-progression-and-regression-day13.jpg | COVID-19 | COVID-19 | 0.9820 | 0.8490 | E2_resnet50 |
-| gr1_lrg-b.jpg | COVID-19 | COVID-19 | 0.9590 | 0.6640 | E2_resnet50 |
-| covid-19-caso-95-1-15.png | COVID-19 | COVID-19 | 0.6400 | 0.6730 | E2_resnet50 |
-| bdc40f9ad2395d88c92479089f5d1b_jumbo-10.jpeg | Bacterial_Pneumonia | COVID-19 | 0.4280 | 0.7190 | E4_resnet50_class_weighted |
-| tpmd200203f2-c.png | COVID-19 | COVID-19 | 0.6000 | 0.4940 | E4_resnet50_class_weighted |
-| 000001-4.jpg | Viral_Pneumonia | Viral_Pneumonia | 0.3820 | 0.9430 | E4_resnet50_class_weighted |
-| 5782ae15.jpg | COVID-19 | COVID-19 | 0.3830 | 0.7720 | E4_resnet50_class_weighted |
-| 16953_4_1.jpg | COVID-19 | Bacterial_Pneumonia | 0.6930 | 0.9320 | E4_resnet50_class_weighted |
-| covid-19-pneumonia-progression-and-regression-day13.jpg | COVID-19 | COVID-19 | 0.6810 | 0.8850 | E4_resnet50_class_weighted |
-| gr1_lrg-b.jpg | COVID-19 | COVID-19 | 0.5300 | 0.7180 | E4_resnet50_class_weighted |
-| covid-19-caso-95-1-15.png | COVID-19 | Bacterial_Pneumonia | 0.3880 | 0.9390 | E4_resnet50_class_weighted |
+| Experiment | Images | Mean central attention | Attention range | Predicted correctly |
+| --- | --- | --- | --- | --- |
+| E2_resnet50 | 8 | 69% | 0.4821 - 0.8494 | 75% |
+| E4_resnet50_class_weighted | 8 | 80% | 0.4943 - 0.9433 | 62% |
 
 Across its eight sampled images, E2_resnet50 places a mean of 69% of the activation energy in the central region and classifies 75% of them correctly. Across its eight sampled images, E4_resnet50_class_weighted places a mean of 80% of the activation energy in the central region and classifies 62% of them correctly.
 
 ### Interpretation
 
-Both models concentrate most of their attention over the lungs rather than on borders, markers or text, which is the reassuring case. The class-weighted model is the more consistent of the two. Its heatmaps sit high in the central fraction on most samples and cover both lungs, including on the one viral case it classifies correctly rather than defaulting to COVID-19. The unweighted model also looks at the chest, but its heatmaps are weaker on the minority cases, which matches its near-total reliance on the majority class in the previous sections. Grad-CAM supports this reading but cannot prove it. A heatmap inside the chest does not establish that the model responds to the radiological findings a clinician would use.
+Both models spend most of their activation energy in the central region rather than on borders, markers or text, which is the reassuring case. The class-weighted model goes further, placing a higher share inside the lungs on average, but it is also less accurate on these particular images. That contrast is worth stating plainly: attention that sits over the chest does not make the prediction right. Grad-CAM supports the reading that neither model relies on image clutter, but it cannot prove it. A heatmap inside the chest does not establish that the model responds to the radiological findings a clinician would use.
 
 ### Limitations
 
-Without lung masks the central region is only a coarse proxy, Grad-CAM outputs are low resolution, and eight images per model cannot represent the dataset.
+Without lung masks the central region is only a coarse proxy, Grad-CAM outputs are low resolution, and eight images per model cannot represent the dataset. The heatmap galleries are kept in reports/figures/e7_gradcam_* because they contain the source radiographs, and per-image results are not reproduced here.
 
 ## 8. How much the scores could move (bootstrap intervals)
 
