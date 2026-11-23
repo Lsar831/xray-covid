@@ -1,4 +1,9 @@
-"""Build the E1-E4 English analysis report with descriptions and interpretations."""
+"""Build the E1-E4 English analysis report with descriptions and interpretations.
+
+Superseded by scripts/05_build_report.py, which assembles the full E1-E8 report. Kept for
+historical reference only: running it overwrites reports/ANALYSIS_REPORT.md with E1-E4 content
+and drops the E5-E8 sections. Safe to delete once the full report has been generated.
+"""
 from __future__ import annotations
 
 import json

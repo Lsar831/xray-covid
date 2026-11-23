@@ -61,7 +61,10 @@ def main():
     parser.add_argument("--model-name", default="resnet50")
     parser.add_argument("--experiment", default="E4_resnet50_class_weighted",
                         help="checkpoint/experiment prefix to analyze")
+    parser.add_argument("--tag", default=None,
+                        help="suffix for output files; defaults to the experiment name")
     args = parser.parse_args()
+    tag = args.tag or args.experiment
 
     cfg = load_config()
     device = get_device()
@@ -97,8 +100,8 @@ def main():
                               "balanced_accuracy": m["balanced_accuracy"], "macro_f1": m["macro_f1"]})
         print(f"  crop={frac}: macro-F1={m['macro_f1']:.4f} bal_acc={m['balanced_accuracy']:.4f}")
     ablation_df = pd.DataFrame(ablation_rows)
-    ablation_df.to_csv(out_dir / "e5_ablation.csv", index=False)
-    ablation_df.to_json(out_dir / "e5_ablation.json", orient="records", indent=2)
+    ablation_df.to_csv(out_dir / f"e5_ablation_{tag}.csv", index=False)
+    ablation_df.to_json(out_dir / f"e5_ablation_{tag}.json", orient="records", indent=2)
 
     # ---------- E6: robustness ----------
     print("\n=== E6: robustness ===")
@@ -125,19 +128,21 @@ def main():
                          "balanced_accuracy": m["balanced_accuracy"], "macro_f1": m["macro_f1"]})
         print(f"  {kind}={sev}: macro-F1={m['macro_f1']:.4f} acc={m['accuracy']:.4f}")
     rob_df = pd.DataFrame(rob_rows)
-    rob_df.to_csv(out_dir / "e6_robustness.csv", index=False)
+    rob_df.to_csv(out_dir / f"e6_robustness_{tag}.csv", index=False)
 
     # robustness figure
     fig, ax = plt.subplots(figsize=(11, 5))
     for kind, grp in rob_df[rob_df["corruption"] != "none"].groupby("corruption"):
         grp = grp.sort_values("severity")
-        ax.plot(range(len(grp)), grp["macro_f1"], marker="o", label=kind)
+        ax.plot(grp["severity"].astype(str), grp["macro_f1"], marker="o", label=kind)
+    clean_f1 = float(rob_df.loc[rob_df["corruption"] == "none", "macro_f1"].iloc[0])
+    ax.axhline(clean_f1, linestyle="--", color="grey", label="clean")
+    ax.set_xlabel("severity")
     ax.set_ylabel("Macro F1")
-    ax.set_title("Robustness: macro F1 under corruption")
+    ax.set_title(f"Robustness: macro F1 under corruption ({tag})")
     ax.legend()
-    ax.set_xticks([])
     plt.tight_layout()
-    plt.savefig(figures / "e6_robustness.png", dpi=130)
+    plt.savefig(figures / f"e6_robustness_{tag}.png", dpi=130)
     plt.close()
 
     # ---------- E8: calibration (before robustness-dependent interpretation) ----------
@@ -172,10 +177,10 @@ def main():
         "overconfidence_gap_before": float(conf.mean() - (test_pred == test_labels).mean()),
         "selective_prediction": selective,
     }
-    with open(out_dir / "e8_calibration.json", "w") as f:
+    with open(out_dir / f"e8_calibration_{tag}.json", "w") as f:
         json.dump(calib, f, indent=2)
-    pd.DataFrame(bins_before).to_csv(out_dir / "e8_reliability_bins_before.csv", index=False)
-    pd.DataFrame(bins_after).to_csv(out_dir / "e8_reliability_bins_after.csv", index=False)
+    pd.DataFrame(bins_before).to_csv(out_dir / f"e8_reliability_bins_before_{tag}.csv", index=False)
+    pd.DataFrame(bins_after).to_csv(out_dir / f"e8_reliability_bins_after_{tag}.csv", index=False)
 
     # reliability diagram
     fig, ax = plt.subplots(figsize=(6, 6))
@@ -188,10 +193,10 @@ def main():
             ax.plot(centers, bdf["accuracy"], marker="o", label=lbl, color=color)
     ax.set_xlabel("Confidence")
     ax.set_ylabel("Accuracy")
-    ax.set_title("Reliability diagram")
+    ax.set_title(f"Reliability diagram ({tag})")
     ax.legend()
     plt.tight_layout()
-    plt.savefig(figures / "e8_reliability_diagram.png", dpi=130)
+    plt.savefig(figures / f"e8_reliability_diagram_{tag}.png", dpi=130)
     plt.close()
     print(f"  ECE before={ece_before:.4f} after={ece_after:.4f} (T={temp:.3f})")
 
@@ -202,7 +207,7 @@ def main():
     n_samples = 8
     rng = np.random.default_rng(cfg["seed"])
     sample_idx = rng.choice(len(test), size=min(n_samples, len(test)), replace=False)
-    gallery_dir = figures / "e7_gradcam"
+    gallery_dir = figures / f"e7_gradcam_{tag}"
     gallery_dir.mkdir(exist_ok=True)
     attn_rows = []
     fig, axes = plt.subplots(len(sample_idx), 3, figsize=(11, 3.2 * len(sample_idx)))
@@ -225,9 +230,9 @@ def main():
         ax[2].imshow(overlay); ax[2].set_title(f"central-attn={attn:.2f}"); ax[2].axis("off")
     gradcam.remove()
     attn_df = pd.DataFrame(attn_rows)
-    attn_df.to_csv(out_dir / "e7_gradcam_attention.csv", index=False)
+    attn_df.to_csv(out_dir / f"e7_gradcam_attention_{tag}.csv", index=False)
     plt.tight_layout()
-    plt.savefig(figures / "e7_gradcam_gallery.png", dpi=110)
+    plt.savefig(figures / f"e7_gradcam_gallery_{tag}.png", dpi=110)
     plt.close()
     print(f"  mean central attention fraction: {attn_df['central_attention_fraction'].mean():.3f}")
 

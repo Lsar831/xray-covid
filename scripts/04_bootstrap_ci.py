@@ -20,7 +20,10 @@ from xray_covid.eval.metrics import (
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--experiment", default="E4_resnet50_class_weighted")
+    parser.add_argument("--tag", default=None,
+                        help="suffix for output files; defaults to the experiment name")
     args = parser.parse_args()
+    tag = args.tag or args.experiment
 
     cfg = load_config()
     out_dir = PROJECT_ROOT / "artifacts" / "metrics"
@@ -41,10 +44,11 @@ def main():
         results[metric_name] = ci
         print(f"{metric_name}: mean={ci['mean']:.4f} 95%CI=[{ci['lower']:.4f}, {ci['upper']:.4f}] (n={ci['n_valid']})")
 
+    results["experiment"] = args.experiment
     results["n_test"] = int(len(y_true))
     results["n_resamples"] = bcfg["n_resamples"]
     results["confidence_level"] = bcfg["confidence_level"]
-    with open(out_dir / "final_bootstrap_ci.json", "w") as f:
+    with open(out_dir / f"final_bootstrap_ci_{tag}.json", "w") as f:
         json.dump(results, f, indent=2)
 
 

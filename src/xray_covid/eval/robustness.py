@@ -54,6 +54,8 @@ class CorruptedDataset(torch.utils.data.Dataset):
         row = self.df.iloc[idx]
         rng = np.random.default_rng(self.seed + idx)
         with Image.open(row["file_path"]) as img:
-            img = img.convert("RGB").resize((self.image_size, self.image_size))
+            img = img.convert("RGB")
+            # Match the evaluation pipeline exactly so that the "none" condition is a true baseline.
+            img = transforms.Resize((self.image_size, self.image_size))(img)
             img = apply_corruption(img, self.kind, self.severity, rng)
         return _normalize_tensor(img), self.label_to_idx[row["label"]]

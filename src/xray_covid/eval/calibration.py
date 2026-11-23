@@ -43,22 +43,24 @@ class TemperatureScaler:
         self.temperature = 1.0
 
     def fit(self, logits: np.ndarray, labels: np.ndarray, max_iter=200):
+        import torch
         import torch.nn as nn
 
         logits_t = torch.tensor(logits, dtype=torch.float32)
         labels_t = torch.tensor(labels, dtype=torch.long)
-        temperature = nn.Parameter(torch.ones(1) * 1.5)
-        optimizer = torch.optim.LBFGS([temperature], lr=0.01, max_iter=max_iter)
+        # Optimize log-temperature so the scale stays positive and well conditioned.
+        log_temperature = torch.zeros(1, requires_grad=True)
+        optimizer = torch.optim.LBFGS([log_temperature], lr=0.01, max_iter=max_iter, line_search_fn="strong_wolfe")
         nll = nn.CrossEntropyLoss()
 
         def closure():
             optimizer.zero_grad()
-            loss = nll(logits_t / temperature, labels_t)
+            loss = nll(logits_t / torch.exp(log_temperature), labels_t)
             loss.backward()
             return loss
 
         optimizer.step(closure)
-        self.temperature = float(temperature.item())
+        self.temperature = float(torch.exp(log_temperature.detach()).item())
         return self.temperature
 
     def transform_probs(self, logits: np.ndarray) -> np.ndarray:
