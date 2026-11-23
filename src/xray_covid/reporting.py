@@ -24,7 +24,11 @@ CLINICAL_DISCLAIMER = (
 
 @dataclass(frozen=True)
 class AnalysisSection:
-    """A report section containing a complete analytical narrative."""
+    """A report section containing a complete analytical narrative.
+
+    ``implication`` and ``limitations`` are optional. When left empty the corresponding
+    subsection is omitted, which keeps short analyses from being padded with filler text.
+    """
 
     title: str
     objective: str
@@ -32,8 +36,8 @@ class AnalysisSection:
     results: str
     description: str
     interpretation: str
-    implication: str
-    limitations: str
+    implication: str = ""
+    limitations: str = ""
 
 
 def _clean(value: object) -> str:
@@ -239,7 +243,7 @@ def interpret_audit_stats(stats: Mapping[str, object] | pd.Series) -> dict[str, 
         facts.append(f"{_format_count(missing)} missing labels or data records")
     if duplicates is not None:
         facts.append(f"{_format_count(duplicates)} duplicates identified")
-    results = "; ".join(facts) + "." if facts else "Comparable audit statistics are not yet available."
+    results = ", ".join(facts) + "." if facts else "Comparable audit statistics are not yet available."
     return {
         "description": "The audit summarizes data completeness, data split composition, and identified anomalies.",
         "results": results,
@@ -331,7 +335,7 @@ def interpret_calibration_metrics(metrics: Mapping[str, object] | pd.Series) -> 
         facts.append(f"Brier score = {_format_number(brier)}")
     if nll is not None:
         facts.append(f"NLL/log loss = {_format_number(nll)}")
-    results = "; ".join(facts) + "." if facts else "Valid calibration metrics are not yet available."
+    results = ". ".join(facts) + "." if facts else "Valid calibration metrics are not yet available."
     return {
         "description": "Calibration assesses the agreement between predicted probabilities and observed outcome frequencies.",
         "results": results,
@@ -379,16 +383,11 @@ def render_sections(title: str, sections: Sequence[AnalysisSection]) -> str:
                 "",
                 _clean(section.interpretation),
                 "",
-                "### Implication",
-                "",
-                _clean(section.implication),
-                "",
-                "### Limitations",
-                "",
-                _clean(section.limitations),
-                "",
             ]
         )
+        for heading, text in (("Implication", section.implication), ("Limitations", section.limitations)):
+            if text and text.strip():
+                lines.extend([f"### {heading}", "", _clean(text), ""])
     lines.extend(["---", "", f"**Clinical disclaimer:** {CLINICAL_DISCLAIMER}", ""])
     return "\n".join(lines)
 

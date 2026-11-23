@@ -11,16 +11,14 @@ description and interpretation for every analysis.
 
 ## Dataset
 
-Requested source: [bachrr/covid-chest-xray (Kaggle)](https://www.kaggle.com/datasets/bachrr/covid-chest-xray).
+Dataset source: [bachrr/covid-chest-xray (Kaggle)](https://www.kaggle.com/datasets/bachrr/covid-chest-xray).
 The Kaggle download endpoint requires authentication, so the data was obtained from
 the **official mirror referenced by the Kaggle page**:
 [ieee8023/covid-chestxray-dataset](https://github.com/ieee8023/covid-chestxray-dataset)
-(commit `78543292f8b01d5e0ed1d0e15dce71949f0657bb`).
 
 ### Scope adjustment (important)
 
-This dataset does **not** contain a `Normal` class, generic `Viral Pneumonia`, or
-lung masks as initially assumed. The scope was therefore adapted to the actual content:
+This dataset does adapted to the actual content of:
 
 - **Four-class etiology classification** (each class has at least 30 samples):
   `COVID-19` (504), `Bacterial_Pneumonia` (73), `Viral_Pneumonia` (42 non-COVID:
@@ -47,11 +45,12 @@ lung masks as initially assumed. The scope was therefore adapted to the actual c
 E5–E8 are run for two models: `E4_resnet50_class_weighted` and `E2_resnet50`.
 
 **Headline result.** Transfer learning beats the from-scratch baseline (test macro F1 0.410
-vs 0.216), but the report's central finding is a negative one: the test set is 79% COVID-19,
+vs 0.216), but the report's central finding is a negative one. The test set is 79% COVID-19,
 and the models with the highest overall accuracy send 90–97% of their predictions to a single
 class while losing almost all minority-class detection. Class weighting is the only strategy
-that spreads predictions across all four classes; it lowers accuracy to 0.552 but raises
-balanced accuracy to 0.443. See **`reports/ANALYSIS_REPORT.md`**.
+that spreads predictions across all four classes. It lowers accuracy to 0.552 but raises
+balanced accuracy to 0.443, and it still misses most bacterial pneumonia cases. See
+**`reports/ANALYSIS_REPORT.md`**.
 
 ## How to run
 
@@ -106,10 +105,11 @@ all hyperparameters are configured in `configs/config.yaml`.
 
 ## Limitations
 
-- Training runs on CPU without a GPU, so the number of epochs is limited; results are
+- Training runs on CPU without a GPU, so the number of epochs is limited and the results are
   indicative rather than maximal-performance benchmarks.
-- The dataset is dominated by COVID-19 cases from publications, introducing selection
+- The dataset is dominated by COVID-19 cases from publications, which introduces selection
   bias and potential source differences across classes (shortcut-learning risk).
-- The test set is small; read the metrics together with the bootstrap confidence intervals.
-- Grad-CAM and the central-region measure are **indicators** of model focus, not
-  clinical validation.
+- The test set is small, so the metrics should be read together with the bootstrap confidence
+  intervals.
+- Grad-CAM and the central-region measure are **indicators** of model focus, not clinical
+  validation.

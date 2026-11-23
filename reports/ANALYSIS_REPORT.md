@@ -4,9 +4,9 @@ This report presents research findings and technical evaluation results, not a c
 
 ## 1. E1. Data Audit and Leakage Prevention
 
-**Objective.** Understand data characteristics, detect duplication, and ensure leakage-free splits.
+**Objective.** Understand the data, detect duplication, and build splits that cannot leak.
 
-**Method.** Manifest built from metadata; labels normalized to four etiology classes; md5 for exact duplicates; difference-hash (Hamming<=2) for near-duplicates; union-find grouping; stratified per-patient split (not per-image).
+**Method.** A manifest is built from the dataset metadata and labels are normalised into four etiology classes. Exact duplicates are found by md5 hash and near-duplicates by difference hash with a Hamming distance of at most 2. Both are merged into groups with union-find. The split is stratified and applied per patient group rather than per image.
 
 ### Results
 
@@ -17,29 +17,23 @@ This report presents research findings and technical evaluation results, not a c
 | Viral_Pneumonia | 42 |
 | Fungal_Pneumonia | 32 |
 
-Summary: {"total_metadata_rows": 950, "modality_filter": ["X-ray"], "valid_image_files": 848, "missing_files": 0, "excluded_buckets": {"Excluded_Unlabeled": 84, "Excluded_ARDS_Unspecified": 81, "Excluded_Other": 32}, "images_in_scope": 651, "unique_patients": 362, "class_distribution": {"COVID-19": 504, "Bacterial_Pneumonia": 73, "Viral_Pneumonia": 42, "Fungal_Pneumonia": 32}, "imbalance_ratio_max_min": 15.75, "readable_images": 651, "exact_duplicate_rows": 0, "near_duplicate_pairs": 41, "cross_patient_near_duplicate_pairs": 35, "unique_dedup_groups": 342, "patient_leakage_clean": true, "dedup_group_leakage_clean": true, "split_counts": {"train": 447, "test": 105, "val": 99}, "width_median": 1024.0, "height_median": 967.0, "mean_intensity_range": [46.58049774169922, 216.57003784179688]}
-
 ### Description
 
-The in-scope dataset contains 651 X-ray images from 362 patients and 342 dedup groups. Class distribution is imbalanced: COVID-19=504, Bacterial_Pneumonia=73, Viral_Pneumonia=42, Fungal_Pneumonia=32 (majority:minority ratio = 15.75:1). No exact (md5) duplicates were found, but 41 near-duplicate pairs (Hamming<=2) were detected, 35 of them cross-patient. Patient-level splitting produced train=447, val=99, test=105; both patient and dedup-group leakage checks passed.
+The audit covers 651 X-ray images from 362 patients, which collapse into 342 deduplication groups. The classes are heavily unbalanced: COVID-19 contributes 504 images while Fungal_Pneumonia contributes only 32, a ratio of 15.75 to 1. No exact duplicate was found, so the same file never appears twice. Near-duplicate analysis is less reassuring: 41 pairs are perceptually almost identical, and 35 of them carry different patient IDs. The final split holds 447 training, 99 validation and 105 test images, and both the patient-level and the deduplication-group leakage checks pass.
 
 ### Interpretation
 
-Description: The audit summarizes data completeness, data split composition, and identified anomalies. Results: 651 samples recorded; 0 missing labels or data records; 41 duplicates identified. Interpretation: These statistics describe the available data, not diagnostic quality or population representativeness. Implication: Group data at the patient level before splitting, document data cleaning, and report per-class metrics together with sample counts. Limitations: A tabular audit does not verify label accuracy, image quality, patient independence, or distributional equivalence to the clinical population.
-
-### Implication
-
-Four etiology classes are used for modeling; invalid and ambiguous categories (unspecified ARDS, Lipoid, TB, Aspiration) are excluded. The imbalance experiment (E4) becomes highly relevant.
+The imbalance is the single most consequential property of this dataset. Because COVID-19 alone accounts for 77% of the images, a model can reach a high accuracy by answering the same class every time, so accuracy cannot be trusted as a summary metric here. Macro F1 and balanced accuracy are reported instead. The 35 cross-patient near-duplicate pairs matter for a different reason. They mean the same radiograph reached the dataset twice under different identifiers, and without grouping it would land in both the training and the test split, quietly inflating the score. Grouping by near-duplicate first is what prevents that.
 
 ### Limitations
 
-Most images come from published COVID-19 case reports, introducing selection bias and possible source differences across classes. dHash is heuristic; heavily edited near-duplicates may go undetected.
+Most images come from published COVID-19 case reports, which introduces selection bias and possible source differences between classes. The difference hash is a heuristic, so heavily edited near-duplicates may still pass undetected.
 
 ## 2. E2-E4. Baseline, Transfer Learning, and Class-Imbalance Handling
 
-**Objective.** Compare a baseline CNN against transfer learning and test imbalance strategies.
+**Objective.** Compare a baseline CNN against transfer learning and test two ways of handling class imbalance.
 
-**Method.** Baseline: SmallCNN trained from scratch. Transfer learning: ResNet50/EfficientNet-B0/DenseNet121 pretrained on ImageNet, backbone frozen then top blocks fine-tuned. Imbalance: none / class-weighted loss / weighted random sampler. Model selection uses validation macro F1; final evaluation on the test set.
+**Method.** The baseline is a small CNN trained from scratch. The transfer models are ResNet50, EfficientNet-B0 and DenseNet121 pretrained on ImageNet, with the backbone frozen and then the top blocks fine-tuned. Imbalance is addressed either through a class-weighted loss or a weighted random sampler, and one run uses no correction at all. The model is chosen on validation macro F1 and only then evaluated once on the test set.
 
 ### Results
 
@@ -54,58 +48,61 @@ Most images come from published COVID-19 case reports, introducing selection bia
 
 ### Description
 
-6 experiments were run with identical splits and metrics. The best test-set model is E2_resnet50 (macro F1=0.4100, balanced acc=0.3773, acc=0.8000). The weakest is E2_baseline_cnn (macro F1=0.2162). The highest `macro_f1` value is 0.4100 for resnet50. The difference from the next-highest value (efficientnet_b0, 0.4037) is 0.0063 points. The range is 0.1938 points, from 0.2162 for small_cnn to 0.4100. These differences are descriptive comparisons and do not establish stable superiority or statistical significance.
+Six configurations were trained on the same splits and scored on the same test set. E2_resnet50 reaches the highest test macro F1 at 0.410, followed closely by E3_efficientnet_b0, while E2_baseline_cnn trails at 0.216. The spread between the best and the worst model is 0.194. The same ranking does not hold for balanced accuracy. The class-weighted model sits near the bottom of the macro-F1 column at 0.386, yet it leads on balanced accuracy at 0.443. Reading the two metrics together is what makes the trade-off visible.
 
 ### Interpretation
 
-Description: The experiments compare architecture configurations using `macro_f1` under the same evaluation. Results: The highest `macro_f1` value is 0.4100 for resnet50. The difference from the next-highest value (efficientnet_b0, 0.4037) is 0.0063 points. The range is 0.1938 points, from 0.2162 for small_cnn to 0.4100. These differences are descriptive comparisons and do not establish stable superiority or statistical significance. Interpretation: Higher scores indicate better results on this evaluation data, but small differences may arise from training variation or sample composition. Implication: Select candidates by considering per-class performance, computational cost, and revalidation; do not select solely on the basis of one aggregate score. Limitations: The comparison does not automatically control for seeds, number of epochs, augmentation, or data leakage; significance testing and external evaluation cannot be inferred from this table.
-
-### Implication
-
-E2_resnet50 is selected for downstream analysis because it has the highest macro F1 on the validation set, *not* because it is clinically preferable: the headline metrics here reward majority-class behaviour (see 'Key finding' below).
+Transfer learning clearly beats the model trained from scratch, so pretrained features carry real signal even when the domain is grayscale radiography. Among the pretrained backbones the differences are small: ResNet50, EfficientNet-B0 and the weighted-sampler variant all land within roughly 0.03 macro F1 of each other, which is below the sampling noise of a 105-image test set. The more meaningful contrast runs along the imbalance axis. Rebalancing the loss lowers macro F1 and accuracy but lifts balanced accuracy, because it stops the model from collapsing onto the majority class. Section 3 shows exactly how large that collapse is.
 
 ### Limitations
 
-Epochs are limited because training runs on CPU without a GPU; results indicate relative trends, not maximal performance. The small test set means small differences between models should be read alongside confidence intervals.
+Training runs on CPU without a GPU, so the number of epochs is deliberately small and the absolute scores are indicative rather than competitive. Each configuration was trained with a single seed, and the test set is small enough that small gaps should be read together with the confidence intervals in the last section.
 
 ## 3. Key Finding: High Accuracy Can Hide a Useless Classifier
 
 **Objective.** Check whether the headline accuracy reflects genuine four-class discrimination.
 
-**Method.** Count how often each model predicts each class on the test set, and compare with the true class counts (COVID-19 83, Bacterial 11, Fungal 6, Viral 5).
+**Method.** For every trained model, count how often each class is predicted on the test set and compare the counts with the true composition (83 COVID-19 images out of 105). Per-class recall is then computed for the two models that receive the detailed analysis.
 
 ### Results
 
-| Experiment | Accuracy | Predicted_per_class | Majority_share_of_predictions |
+| Experiment | Accuracy | Predicted counts (Bact / COVID / Fung / Viral) | Share of predictions on one class |
 | --- | --- | --- | --- |
-| E2_baseline_cnn | 0.7619 | 3 / 102 / 0 / 0 | 0.9714 |
-| E2_resnet50 | 0.8000 | 1 / 99 / 2 / 3 | 0.9429 |
-| E3_densenet121 | 0.7905 | 2 / 101 / 2 / 0 | 0.9619 |
-| E3_efficientnet_b0 | 0.7905 | 7 / 94 / 2 / 2 | 0.8952 |
-| E4_resnet50_class_weighted | 0.5524 | 26 / 60 / 11 / 8 | 0.5714 |
-| E4_resnet50_weighted_sampler | 0.6857 | 8 / 83 / 9 / 5 | 0.7905 |
+| E2_baseline_cnn | 0.7620 | 3 / 102 / 0 / 0 | 0.9710 |
+| E2_resnet50 | 0.8000 | 1 / 99 / 2 / 3 | 0.9430 |
+| E3_densenet121 | 0.7900 | 2 / 101 / 2 / 0 | 0.9620 |
+| E3_efficientnet_b0 | 0.7900 | 7 / 94 / 2 / 2 | 0.8950 |
+| E4_resnet50_class_weighted | 0.5520 | 26 / 60 / 11 / 8 | 0.5710 |
+| E4_resnet50_weighted_sampler | 0.6860 | 8 / 83 / 9 / 5 | 0.7900 |
+
+**Recall per class**
+
+| Experiment | Bacterial_Pneumonia | COVID-19 | Fungal_Pneumonia | Viral_Pneumonia |
+| --- | --- | --- | --- | --- |
+| E2_baseline_cnn | 0.0000 | 0.9600 | 0.0000 | 0.0000 |
+| E2_resnet50 | 0.0000 | 0.9800 | 0.3300 | 0.2000 |
+| E3_densenet121 | 0.0000 | 0.9800 | 0.3300 | 0.0000 |
+| E3_efficientnet_b0 | 0.1800 | 0.9500 | 0.3300 | 0.0000 |
+| E4_resnet50_class_weighted | 0.0900 | 0.6100 | 0.6700 | 0.4000 |
+| E4_resnet50_weighted_sampler | 0.0900 | 0.8100 | 0.5000 | 0.2000 |
 
 ### Description
 
-The test set is dominated by COVID-19 (83 of 105 images). E2_baseline_cnn sends 97% of all predictions to a single class while reporting accuracy 0.7619. The class-weighted model spreads predictions across all four classes, which is why it looks 'worse' on accuracy but is the only model that detects non-COVID pneumonia at all.
+The test set is dominated by COVID-19, which makes up 83 of its 105 images. E2_baseline_cnn comes closest to exploiting that, sending 97% of all its predictions to a single class while still reporting an accuracy of 0.76. Its recall tells the rest of the story. It finds 98% of the COVID-19 cases but none of the bacterial ones. The class-weighted model spreads its predictions over all four classes, and that redistribution costs accuracy: the score drops to 0.55.
 
 ### Interpretation
 
-Accuracy and macro F1 computed on a heavily imbalanced test set can reward a model that has learned the base rate instead of the task. For a screening application a false negative on COVID-19 is more costly than a false positive, so per-class sensitivity, not overall accuracy, must drive model selection.
-
-### Implication
-
-Report per-class sensitivity and balanced accuracy alongside accuracy, and never select a model on the test set. The class-imbalance strategy is not an optional extra but the central modelling decision.
+On a skewed test set, accuracy rewards a model that has learned the base rate instead of the task. The unweighted model is not detecting COVID-19 better than its rival. It answers COVID-19 by default. The class-weighted model behaves differently, with recall of 61% for COVID-19, 9% for bacterial and 67% for fungal pneumonia. That is genuine discrimination, but it is also uneven. Bacterial pneumonia, the hardest class to separate from viral disease, is still largely missed, and the COVID-19 recall falls well below the near-perfect figure of the unweighted model. Neither model is fit for clinical use, and they fail in opposite ways.
 
 ### Limitations
 
-Each of the three minority classes has 5-11 test images, so per-class estimates carry very wide uncertainty; this analysis demonstrates a failure mode rather than estimating its exact size.
+Each minority class has between 5 and 11 test images, so a single image moves a per-class recall by roughly ten points. The table demonstrates a failure mode rather than measuring its exact size.
 
 ## 4. E5. Center-Crop Ablation
 
-**Objective.** Test whether predictions depend on image borders or on the central (thoracic) region.
+**Objective.** Test whether predictions depend on the image border or on the central thoracic region.
 
-**Method.** Re-evaluate the test set with center-crop fractions 1.0/0.8/0.6, then resize back to 224 px; applied to two models selected a priori (the class-weighted ResNet50 and the unweighted ResNet50).
+**Method.** The test set is re-evaluated with the outer part of each image cropped away, keeping 100, 80 and 60 percent of the frame and resizing back to 224 pixels. The ablation is run on the two models that receive the detailed analysis, the class-weighted and the unweighted ResNet50.
 
 ### Results
 
@@ -116,25 +113,21 @@ Each of the three minority classes has 5-11 test images, so per-class estimates 
 
 ### Description
 
-E2_resnet50: crop=1.0 -> macro F1=0.4100 (balanced acc=0.3773), crop=0.8 -> macro F1=0.4300 (balanced acc=0.4326), crop=0.6 -> macro F1=0.3574 (balanced acc=0.3547); E4_resnet50_class_weighted: crop=1.0 -> macro F1=0.3864 (balanced acc=0.4430), crop=0.8 -> macro F1=0.4472 (balanced acc=0.5975), crop=0.6 -> macro F1=0.2666 (balanced acc=0.3645).
+At full frame E2_resnet50 scores 0.410 macro F1. Cropping to 0.8 changes that to 0.430 and cropping to 0.6 to 0.357. At full frame E4_resnet50_class_weighted scores 0.386 macro F1. Cropping to 0.8 changes that to 0.447 and cropping to 0.6 to 0.267.
 
 ### Interpretation
 
-Both models behave non-monotonically. A mild crop to 0.8 *helps*: E4_resnet50_class_weighted gains 0.0608 macro F1, and the class-weighted model's balanced accuracy rises from 0.44 to 0.60. Cropping further to 0.6 then sharply hurts both (roughly 0.12-0.13 macro F1 below clean), so the models neither ignore the thorax nor rely on it exclusively. Two readings are consistent with this: borders carry uninformative clutter (frames, markers) worth removing, and a 0.6 crop begins to discard lung field itself. The data therefore support mild center-cropping as preprocessing, not aggressive cropping.
-
-### Implication
-
-If a moderate center-crop is harmless or beneficial, border artifacts can be discarded before training and inference.
+Neither model reacts monotonically to cropping. A mild crop to 0.8 frames helps, and E4_resnet50_class_weighted gains 0.061 macro F1 in the process, while the same model's balanced accuracy climbs from 0.44 to 0.60. Cropping all the way to 0.6 then reverses the gain and leaves both models well below their clean score. That pattern rules out the two simple explanations. The models do not ignore the thorax, because a tight crop destroys their performance. They do not rely only on the thorax either, because trimming the outer 10% of each side improves them. The most economical reading is that the border carries clutter, such as acquisition frames, laterality markers and burned-in text, while the lung field still occupies most of the 0.8 frame. This supports mild center-cropping as a preprocessing step and warns against cropping aggressively.
 
 ### Limitations
 
-Center-crop is not true lung segmentation; the central region is only a coarse proxy for the thorax.
+A center crop is not lung segmentation. It removes a fixed rectangular border, so the remaining clip may include abdomen or neck while excluding the lung apices.
 
 ## 5. E6. Robustness Testing
 
 **Objective.** Measure model resilience to image-quality degradation.
 
-**Method.** Corrupt the test set with Gaussian noise, brightness, contrast, Gaussian blur, and downscaling at several severity levels; measure macro F1 and accuracy. The corruption pipeline now uses the same resize as evaluation, so the 'none' row is an exact clean baseline.
+**Method.** The test images are degraded with additive Gaussian noise, brightness and contrast shifts, Gaussian blur and downscaling at several severities, and every condition is scored with macro F1 and accuracy. The corruption path uses the same resize as normal evaluation, so the clean row is an exact baseline and not a slightly different preprocessing pipeline.
 
 ### Results
 
@@ -149,25 +142,21 @@ Center-crop is not true lung segmentation; the central region is only a coarse p
 
 ### Description
 
-E2_resnet50: clean macro F1=0.4100, largest drop under gaussian_blur (severity=2.0) to 0.2194 (down 0.1906); E4_resnet50_class_weighted: clean macro F1=0.3864, largest drop under gaussian_noise (severity=0.1) to 0.2127 (down 0.1737).
+E2_resnet50 starts from 0.410 macro F1 on clean images. Its weakest condition is gaussian blur at severity 2.0, where the score falls to 0.219. E4_resnet50_class_weighted starts from 0.386 macro F1 on clean images. Its weakest condition is gaussian noise at severity 0.1, where the score falls to 0.213.
 
 ### Interpretation
 
-Gaussian noise is the most damaging corruption for both models, and blur plus strong downscaling follow closely. The decisive observation is the divergence between accuracy and macro F1 under noise: the unweighted model holds its accuracy near 0.79 across all noise levels while macro F1 and balanced accuracy both collapse to about half their clean value. The model has not become confused; it has retreated entirely to the majority class. A robustness report based on accuracy alone would have declared this model robust to noise, which is exactly the trap this experiment is designed to expose. The class-weighted model degrades more gracefully but still loses over 40% of its macro F1.
-
-### Implication
-
-Noise and blur dominate the degradation, so they are the priority for augmentation and for inference-time quality control.
+Additive noise is the corruption the models tolerate least. For E2_resnet50 the interesting part is what does not happen. Its accuracy stays within 0.05 of its clean value across every corruption tested, flat at 0.79 under noise, while its macro F1 roughly halves and balanced accuracy falls with it. A model that kept its accuracy would normally look robust. Here the accuracy survives because the model answers the majority class no matter what it sees, so the score is stable for the wrong reason. Reporting robustness through accuracy alone would have declared this model the most reliable of the two. The class-weighted model loses less on average, its worst drop is 0.17 against 0.19 for the unweighted one, but that ordering does not hold condition by condition: under noise the class-weighted model ends up slightly below its rival (0.213 against 0.221 at severity 0.1). Neither model is robust enough to be deployed without quality control on incoming images.
 
 ### Limitations
 
-Corruptions are synthetic and do not fully represent real clinical artifacts; some severity grids (e.g. downscaling) are not monotone because of the small test set.
+The corruptions are synthetic and do not reproduce real acquisition problems such as detector noise, motion or poor positioning. Some severity grids are not monotone, which is expected when a handful of images can flip a per-class score.
 
 ## 6. E8. Confidence Calibration and Selective Prediction
 
-**Objective.** Assess whether model confidence matches accuracy and build an abstention mechanism.
+**Objective.** Check whether model confidence matches observed accuracy and test an abstention mechanism.
 
-**Method.** Expected Calibration Error (ECE) and reliability diagram; single-parameter temperature scaling fitted on the validation set (log-parameterisation for numerical stability); selective prediction across confidence thresholds.
+**Method.** Reliability diagrams and Expected Calibration Error are computed on the test set before and after temperature scaling. The single temperature parameter is fitted on the validation set, optimised in log space so that the scale stays positive. Selective prediction then reports accuracy and coverage as the confidence threshold is raised.
 
 ### Results
 
@@ -201,25 +190,21 @@ Corruptions are synthetic and do not fully represent real clinical artifacts; so
 
 ### Description
 
-E2_resnet50: ECE 0.0415 -> 0.0776 (T=0.710), confidence=0.7854 vs accuracy=0.8000; E4_resnet50_class_weighted: ECE 0.1528 -> 0.1478 (T=0.660), confidence=0.4864 vs accuracy=0.5524.
+E2_resnet50 enters calibration with an ECE of 0.041 at a mean confidence of 0.79 against an accuracy of 0.80, and leaves with an ECE of 0.078 after a temperature of 0.71. E4_resnet50_class_weighted enters calibration with an ECE of 0.153 at a mean confidence of 0.49 against an accuracy of 0.55, and leaves with an ECE of 0.148 after a temperature of 0.66.
 
 ### Interpretation
 
-Temperature scaling is fitted on validation and applied to test, so it cannot change accuracy; it only redistributes confidence. Both models are slightly *underconfident* on average (negative gap), but ECE treats miscalibration in either direction as error. For the class-weighted model scaling helps a little (ECE 0.153 -> 0.148) because its confidence is spread across bins. For the unweighted model ECE gets *worse* (0.042 -> 0.078): its confidence is already concentrated near the prediction threshold of a single class, and T<1 sharpens that further. The lesson is that a low ECE can coexist with poor discrimination, and calibration cannot repair a model that ignores most classes. Selective prediction behaves differently per model: for the unweighted model accuracy climbs from 0.80 at full coverage to 0.90 at ~58% coverage, but this filters mostly on COVID-vs-other confidence, so the accepted set stays dominated by the majority class. For the class-weighted model accuracy never exceeds ~0.62 at any threshold, so there is no useful operating point.
-
-### Implication
-
-A threshold can flag uncertain predictions as 'review required' for research purposes; it does not remedy a model that ignores three of the four classes.
+Temperature scaling is fitted on the validation set and then applied to the test set, so by construction it cannot change accuracy. It only redistributes confidence across the probability scale. The class-weighted model is underconfident rather than overconfident, with a gap of -0.07 between confidence and accuracy, and scaling closes a small part of it, moving ECE from 0.153 to 0.148. The unweighted model is calibrated better to begin with, at 0.041, yet the same procedure makes it worse, rising to 0.078. The reason is that its confidence had concentrated around a single answer, and the fitted scale sharpens that further instead of spreading it. A low ECE is therefore not evidence that a model is trustworthy: a classifier that answers one class with moderate confidence can look well calibrated while missing every other class. Selective prediction splits along the same fault line. For the unweighted model, abstaining on low-confidence cases pushes accuracy from 0.80 at full coverage to about 0.90 when roughly 58% of the images are retained, but the retained images are the ones it was already calling COVID-19, so the gain reflects the majority class rather than new diagnostic ability. For the class-weighted model no threshold reaches 0.62 accuracy, so there is no operating point worth setting. Abstention can express uncertainty, but it cannot supply the missing class information.
 
 ### Limitations
 
-Calibration is fitted on a small validation set (n=99); ECE is sensitive to bin count and sample size, and with 105 test images a single image moves accuracy by ~1 point.
+The temperature is fitted on only 99 validation images, and ECE depends on the number of bins and on class prevalence. With 105 test images, a single image shifts accuracy by about one percentage point.
 
 ## 7. E7. Explainability with Grad-CAM
 
-**Objective.** Inspect the image regions driving model predictions.
+**Objective.** Inspect which image regions drive the predictions.
 
-**Method.** Grad-CAM on the last convolutional block over 8 randomly sampled test images per model; heatmap overlay; fraction of activation energy in the central region as a quantitative focus indicator.
+**Method.** Grad-CAM is computed on the last convolutional block for eight randomly sampled test images per model, and the fraction of activation energy falling inside the central region is used as a rough indicator of focus on the lungs.
 
 ### Results
 
@@ -248,25 +233,21 @@ Calibration is fitted on a small validation set (n=99); ECE is sensitive to bin 
 
 ### Description
 
-E2_resnet50: mean central-attention fraction=0.686 (75% of the shown samples correct); E4_resnet50_class_weighted: mean central-attention fraction=0.800 (62% of the shown samples correct).
+Across its eight sampled images, E2_resnet50 places a mean of 69% of the activation energy in the central region and classifies 75% of them correctly. Across its eight sampled images, E4_resnet50_class_weighted places a mean of 80% of the activation energy in the central region and classifies 62% of them correctly.
 
 ### Interpretation
 
-High central-region energy indicates the model looks at the thorax rather than at markers or text, so the class-weighted model's predictions are not obviously driven by source artifacts. Grad-CAM is indicative, not causal: a heatmap inside the lungs does not prove the model uses the correct radiological findings.
-
-### Implication
-
-The finding supports using center-crop as a light artifact-removal step and flags the shortcut-learning risk that must be checked with an external dataset.
+Both models concentrate most of their attention over the lungs rather than on borders, markers or text, which is the reassuring case. The class-weighted model is the more consistent of the two. Its heatmaps sit high in the central fraction on most samples and cover both lungs, including on the one viral case it classifies correctly rather than defaulting to COVID-19. The unweighted model also looks at the chest, but its heatmaps are weaker on the minority cases, which matches its near-total reliance on the majority class in the previous sections. Grad-CAM supports this reading but cannot prove it. A heatmap inside the chest does not establish that the model responds to the radiological findings a clinician would use.
 
 ### Limitations
 
-The central region is a coarse proxy because lung masks are unavailable; Grad-CAM is low-resolution and only 8 images per model are shown.
+Without lung masks the central region is only a coarse proxy, Grad-CAM outputs are low resolution, and eight images per model cannot represent the dataset.
 
 ## 8. Statistical Evaluation: Bootstrap Confidence Intervals
 
-**Objective.** Quantify uncertainty in the primary test-set metrics across the compared models.
+**Objective.** Quantify how much the reported test scores could move under resampling.
 
-**Method.** Percentile bootstrap resampling of the test set predictions; 95% intervals for macro F1 and balanced accuracy.
+**Method.** Percentile bootstrap over the test-set predictions, with 95% intervals for macro F1 and balanced accuracy.
 
 ### Results
 
@@ -278,19 +259,15 @@ The central region is a coarse proxy because lung masks are unavailable; Grad-CA
 
 ### Description
 
-Percentile bootstrap with 1000 resamples on the test set (n=105). The macro-F1 and balanced-accuracy intervals of all three models overlap almost completely.
+Each model's test predictions are resampled 1000 times to build percentile intervals around a test set of 105 images. The intervals for macro F1 are wide: they span 0.24 to 0.33 metric points. Every interval contains the point estimates of the other models.
 
 ### Interpretation
 
-Because the intervals overlap, the observed ranking of models on this test set is not statistically separable; the differences are within sampling noise. The honest conclusion is that the experiment cannot rank these architectures reliably, which is why the design-level finding (class dominance) is the more defensible result.
-
-### Implication
-
-CIs are reported so that performance differences are not overstated.
+The overlap means that the ranking produced by the previous sections cannot be defended statistically. Reshuffling the same 105 images is enough to move the ordering of the three models, so the difference between a macro F1 of 0.41 and of 0.38 is not a reliable finding about the architectures. What does survive the resampling is the direction of the class-imbalance effect: the class-weighted model keeps a higher balanced accuracy, which is why that comparison rather than the architecture ranking carries the weight of this study.
 
 ### Limitations
 
-Image-level bootstrap ignores correlation between images from the same patient; the intervals are therefore slightly optimistic.
+Resampling individual images ignores the correlation between images that come from the same patient, so the intervals reported here are somewhat optimistic. Repeating the training across several seeds would capture variation that this procedure cannot see.
 
 ---
 
